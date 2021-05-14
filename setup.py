@@ -10,7 +10,7 @@ except(IOError, ImportError):
 
 setup(
     name='pyEliasFano',
-    version='0.0.3',
+    version='0.0.4',
     description='pyEliasFano offers quasi-succinct represenations for monotone non-decreasing sequences of integers.',
     long_description=long_description,
     long_description_content_type=long_description_content_type,

@@ -16,15 +16,13 @@ pip install pyEliasFano
 
 ## Usage
 ```python
-
-
-import pyEliasFano as EF
+from pyEliasFano.EliasFano import EliasFano
 ```
 imports the module.
 
 ```python
 integers = sorted([123, 1343, 2141, 35312, 4343434])
-ef = EF.EliasFano(integers)
+ef = EliasFano(integers)
 ```
 creates an Elias-Fano structure for the sorted ``integers`` list.
 ```python
