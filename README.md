@@ -48,6 +48,8 @@ returns the largest integer stored in the Elias-Fano structure that is smaller t
 Here, we get ``35312``. 
 
 # Citation
+[![DOI](https://zenodo.org/badge/367291041.svg)](https://zenodo.org/badge/latestdoi/367291041)
+
 ```bibtex
 
 ```
