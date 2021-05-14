@@ -10,8 +10,8 @@ except(IOError, ImportError):
 
 setup(
     name='pyEliasFano',
-    version='0.0.2',
-    description='pyEliasFano offers a **quasi-succinct** represenation for a monotone non-decreasing sequence of n integers from the universe [0 . . . m) occupying 2*n+n*ceil(log2(m/n)) bits.',
+    version='0.0.3',
+    description='pyEliasFano offers quasi-succinct represenations for monotone non-decreasing sequences of integers.',
     long_description=long_description,
     long_description_content_type=long_description_content_type,
     url='https://github.com/rmrschub/pyEliasFano',
