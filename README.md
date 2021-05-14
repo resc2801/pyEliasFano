@@ -1,4 +1,5 @@
 # pyEliasFano
+
 pyEliasFano offers a **quasi-succinct** represenation for a monotone non-decreasing sequence of n integers from 
 the universe [0 . . . m) occupying 2*n+n*ceil(log2(m/n)) bits.
 
@@ -48,11 +49,20 @@ returns the largest integer stored in the Elias-Fano structure that is smaller t
 Here, we get ``35312``. 
 
 # Citation
-[![DOI](https://zenodo.org/badge/367291041.svg)](https://zenodo.org/badge/latestdoi/367291041)
-
 ```bibtex
-
+@misc{rmrschub_2021_pyEliasFano,
+    author       = {René Schubotz},
+    title        = {{pyEliasFano: Quasi-succinct represenations for monotone non-decreasing sequences of integers.}},
+    month        = may,
+    year         = 2021,
+    doi          = {10.5281/zenodo.4761443},
+    version      = {0.0.1},
+    publisher    = {Zenodo},
+    url          = {https://github.com/rmrschub/pyEliasFano}
+    }
 ```
+
+[![DOI](https://zenodo.org/badge/367291041.svg)](https://zenodo.org/badge/latestdoi/367291041)
 
 
 # License
