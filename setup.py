@@ -16,10 +16,10 @@ setup(
                       ],
 
     classifiers=[
-        'Development Status:: 3 - Alpha',
-        'License:: CC BY-NC-SA 4.0',
-        'Programming Language:: Python:: 3:: Only',
-        'Operating System:: OS Independent',
-        'Topic:: System:: Archiving:: Compression',
+#       'Development Status:: 3 - Alpha',
+#        'License:: CC BY-NC-SA 4.0',
+#        'Programming Language:: Python:: 3:: Only',
+#        'Operating System:: OS Independent',
+#        'Topic:: System:: Archiving:: Compression',
     ],
 )
