@@ -114,8 +114,7 @@ class EliasFano:
         if x >= self._max_val:
             return self._max_val
         else:
-            return self.select(max(0, self.rank(self.nextGEQ(x)) - 1))
-
+            return x if x == self.nextGEQ(x) else self.select(max(0, self.rank(self.nextGEQ(x)) - 1))
 
 def load(file_path: str):
     """

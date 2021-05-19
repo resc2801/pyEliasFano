@@ -4,6 +4,9 @@
 pyEliasFano offers a **quasi-succinct** represenation for a monotone non-decreasing sequence of n integers from 
 the universe [0 . . . m) occupying 2*n+n*ceil(log2(m/n)) bits.
 
+![](https://www.antoniomallia.it/uploads/Elias-Fano.png)
+*by Antonio Mallia, 2018*
+
 It supports the following operations:
 - **select(k)**: nearly constant time access to the k-th element,
 - **rank(x)**: access to the index within the structure for given integer x.
@@ -26,6 +29,8 @@ integers = sorted([123, 1343, 2141, 35312, 4343434])
 ef = EliasFano(integers)
 ```
 creates an Elias-Fano structure for the sorted ``integers`` list.
+
+### Rank and Select
 ```python
 ef.select(2)
 ```
@@ -36,6 +41,8 @@ ef.rank(4343434)
 ```
 returns the index position for the given integer if stored within the Elias-Fano structure. 
 Here, we get ``4``.
+
+### nextGEQ and nextLEQ
 ```python
 ef.nextGEQ(1345)
 ```
