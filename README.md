@@ -61,8 +61,8 @@ Here, we get ``35312``.
     title        = {{pyEliasFano: Quasi-succinct represenations for monotone non-decreasing sequences of integers.}},
     month        = may,
     year         = 2021,
-    doi          = {10.5281/zenodo.4761443},
-    version      = {0.0.1},
+    doi          = {10.5281/zenodo.4774164},
+    version      = {0.0.5},
     publisher    = {Zenodo},
     url          = {https://github.com/rmrschub/pyEliasFano}
     }
