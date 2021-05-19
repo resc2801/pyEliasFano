@@ -1,9 +1,9 @@
 import math
 from typing import List
-
-from bitarray import bitarray
-from bitarray.util import ba2int, int2ba
-from unary_coding import inverted_unary
+from gmpy2 import xmpz, mpz, t_divmod_2exp, t_div_2exp
+from itertools import compress, islice
+import operator
+import gc
 
 
 class EliasFano:
@@ -23,19 +23,27 @@ class EliasFano:
         Construct an Elias-Fano structure for the given sorted list of integers.
         :param numbers: sorted list of integers
         """
-        assert all(numbers[i] <= numbers[i + 1] for i in range(len(numbers) - 1)), ValueError("Input list not sorted!")
 
-        self.max_id = (len(numbers) - 1)
-        self._size = math.ceil(math.log2(max(numbers) / len(numbers)))
-        superiors, inferiors = list(zip(*[divmod(n, 1 << self._size) for n in sorted(numbers)]))
+        self._m = max(numbers)
+        self._n = len(numbers)
+        self._upper_bits = math.ceil(math.log2(self._n))
+        self._lower_bits = math.ceil(math.log2(self._m / self._n))
+        self._inferiors = xmpz()  # n*log2(m/n) bits
+        self._superiors = xmpz()  # 2n bits
 
-        self._inferiors = bitarray()
-        for n in inferiors:
-            self._inferiors += bitarray(str(bin(n))[2:].zfill(self._size))
+        sups, infs = list(zip(*[t_divmod_2exp(n, self._lower_bits) for n in numbers]))
 
-        self._superiors = bitarray()
-        for i, n in enumerate(superiors):
-            self._superiors += bitarray(inverted_unary(n - superiors[i - 1] if i else n))
+        for i, n in enumerate(infs):
+            self._inferiors[i * self._lower_bits:(i + 1) * self._lower_bits] = n[0:self._lower_bits]
+
+        self._superiors = xmpz(
+            int("".join(["0" + "1" * sups.count(mpz(i)) for i in reversed(range(0, 2 ** self._upper_bits))]), 2))
+
+        self._min_val = self.select(0)
+        self._max_val = self.select(self._n - 1)
+
+        del sups, infs, i, n, numbers
+        gc.collect()
 
     def select(self, k: int) -> int:
         """
@@ -43,14 +51,36 @@ class EliasFano:
         :param k: index of integer to be reconstructed.
         :return: k-th stored integer
         """
-        assert 0 <= k <= self.max_id, IndexError("Index out of range.")
+        assert 0 <= k < self._n, IndexError("Index out of range.")
 
-        inferior = self._get_inferior(k)
+        # for lower part simply jump to the corresponding bits in self._inferiors
+        inferior = int(self._inferiors[(self._lower_bits * k):(self._lower_bits * (k + 1))])
 
-        # To compute the higher part we need to perform a select_1(i) - i
-        superior = self._superiors.search((int2ba(1)))[k] - k
+        # To compute the higher part we need to perform a select_1(k) - k on self._superiors
+        superior = next(islice(compress(range(0, 2 * self._n), list(self._superiors.iter_bits())), k, k + 1)) - k
 
-        return (superior << self._size) + inferior
+        return (superior << self._lower_bits) + inferior
+
+    def rank(self, x: int) -> int:
+        """
+        Return the index within the Elias-Fano structure for given integer x.
+        :param x: integer
+        :return: index of x to be reconstructed.
+        """
+        assert self._min_val <= x <= self._max_val, ValueError("Value not in this EF structure.")
+
+        k = -1
+        sup, inf = t_divmod_2exp(x, self._lower_bits)
+
+        for c in self._superiors.iter_bits():
+            if c:
+                k += 1
+                if sup == 0 and inf == int(self._inferiors[(self._lower_bits * k):(self._lower_bits * (k + 1))]):
+                    return k
+            else:
+                sup -= 1
+
+        raise ValueError(f"{x} ∉ EF.")
 
     def nextGEQ(self, x):
         """
@@ -58,21 +88,18 @@ class EliasFano:
         :param x: integer
         :return: min{y ∈ EF : y ≥ x}
         """
-        assert x <= self.select(self.max_id), ValueError("Given value not in this EF structure.")
+        assert x <= self._max_val, ValueError(f"∄y: min{{y ∈ EF: y ≥ {x}}}.")
 
-        if x == self.select(self.max_id):
-            return self.select(self.max_id)
-        elif x <= self.select(0):
-            return self.select(0)
-        else:
-            sup, inf = divmod(x, 1 << self._size)
-            p = int2ba(sup).search((int2ba(0)))[0] - sup
+        if x <= self.select(0):
+            return self._min_val
 
-            #        if p < 0:
-            #            logging.warn("∀y ∈ EF : x > y")
-            #            return self.select(self.max_id)
+        elif x == self.select(self._n - 1):
+            return self._max_val
 
-            for i in range(p, self.max_id + 1):
+        elif self.select(0) < x < self.select(self._n - 1):
+            sup = t_div_2exp(x, self._lower_bits)
+            p = next(islice(compress(range(0, 2 * self._n), map(operator.not_, self._superiors.iter_bits())), sup-1, sup)) - (sup-1)
+            for i in range(p, self._n):
                 if self.select(i) >= x:
                     return self.select(i)
 
@@ -82,46 +109,12 @@ class EliasFano:
         :param x: integer
         :return: max{y ∈ EF : x ≥ y}
         """
-        assert x >= self.select(0), ValueError("Given value not in this EF structure.")
+        assert x >= self._min_val, ValueError(f"∄y: max{{y ∈ EF : {x} ≥ y}}")
 
-        if x >= self.select(self.max_id):
-            return self.select(self.max_id)
+        if x >= self._max_val:
+            return self._max_val
         else:
             return self.select(max(0, self.rank(self.nextGEQ(x)) - 1))
-
-    def rank(self, x: int) -> int:
-        """
-        Return the index within the Elias-Fano structure for given integer x.
-        :param x: integer
-        :return: index of x to be reconstructed.
-        """
-        assert self.select(0) <= x <= self.select(self.max_id), ValueError("Given value not in this EF structure.")
-        # TODO: implement rank using bitarray!
-        k = -1
-        sup, inf = divmod(x, 1 << self._size)
-        for c in self._superiors:
-            if c == 0:
-                sup -= 1
-            else:
-                k += 1
-                if sup == 0 and inf == self._get_inferior(k):
-                    return k
-
-        raise ValueError(f"Given element {x} does not exist in structure.")
-
-    def _get_inferior(self, k: int) -> int:
-        """
-        Return the inferior part of the k-th integer.
-        :param k: index
-        :return: inferior part of k-th integer stored in this Elias-Fano structure
-        """
-        assert 0 <= k <= self.max_id, IndexError("Index out of range.")
-
-        inferior = self._inferiors[(self._size * k):(self._size * (k + 1))]
-        if len(inferior) == 0:
-            return 0
-        else:
-            return ba2int(inferior)
 
 
 def load(file_path: str):
@@ -153,4 +146,3 @@ def save(ef_structure: EliasFano, file_path: str):
     assert isinstance(ef_structure, EliasFano), ValueError("Given object is not an Elias-Fano structure.")
 
     dump(ef_structure, open(file_path, "wb"))
-

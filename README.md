@@ -1,4 +1,5 @@
 # pyEliasFano
+[![DOI](https://zenodo.org/badge/367291041.svg)](https://zenodo.org/badge/latestdoi/367291041)
 
 pyEliasFano offers a **quasi-succinct** represenation for a monotone non-decreasing sequence of n integers from 
 the universe [0 . . . m) occupying 2*n+n*ceil(log2(m/n)) bits.
@@ -16,7 +17,7 @@ pip install pyEliasFano
 
 ## Usage
 ```python
-from pyEliasFano.EliasFano import EliasFano
+from pyEliasFano import EliasFano
 ```
 imports the module.
 
@@ -59,9 +60,6 @@ Here, we get ``35312``.
     url          = {https://github.com/rmrschub/pyEliasFano}
     }
 ```
-
-[![DOI](https://zenodo.org/badge/367291041.svg)](https://zenodo.org/badge/latestdoi/367291041)
-
 
 # License
 <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-nc-sa/4.0/80x15.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.
