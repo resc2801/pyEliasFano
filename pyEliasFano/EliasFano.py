@@ -1,9 +1,12 @@
 import math
 from typing import List
-from gmpy2 import xmpz, mpz, t_divmod_2exp, t_div_2exp
+from gmpy2 import xmpz, mpz, t_divmod_2exp, t_div_2exp, t_mod_2exp
 from itertools import compress, islice
 import operator
 import gc
+from bitarray import bitarray
+from bitarray.util import ba2int
+from unary_coding import inverted_unary
 
 
 class EliasFano:
@@ -24,26 +27,25 @@ class EliasFano:
         :param numbers: sorted list of integers
         """
 
+        self._min_val = numbers[0]
+        self._max_val = numbers[-1]
         self._m = max(numbers)
         self._n = len(numbers)
         self._upper_bits = math.ceil(math.log2(self._n))
         self._lower_bits = math.ceil(math.log2(self._m / self._n))
         self._inferiors = xmpz()  # n*log2(m/n) bits
-        self._superiors = xmpz()  # 2n bits
+        self._superiors = xmpz()  # 2n bit
 
         sups, infs = list(zip(*[t_divmod_2exp(n, self._lower_bits) for n in numbers]))
 
         for i, n in enumerate(infs):
             self._inferiors[i * self._lower_bits:(i + 1) * self._lower_bits] = n[0:self._lower_bits]
 
-        self._superiors = xmpz(
-            int("".join(["0" + "1" * sups.count(mpz(i)) for i in reversed(range(0, 2 ** self._upper_bits))]), 2))
-
-        self._min_val = self.select(0)
-        self._max_val = self.select(self._n - 1)
-
-        del sups, infs, i, n, numbers
-        gc.collect()
+        superiors = bitarray()
+        for i, n in enumerate(sups):
+            superiors += bitarray(inverted_unary(int(n) - sups[i - 1] if i else int(n)))
+        superiors.reverse()
+        self._superiors = xmpz(ba2int(superiors))
 
     def select(self, k: int) -> int:
         """
@@ -115,6 +117,7 @@ class EliasFano:
             return self._max_val
         else:
             return x if x == self.nextGEQ(x) else self.select(max(0, self.rank(self.nextGEQ(x)) - 1))
+
 
 def load(file_path: str):
     """
