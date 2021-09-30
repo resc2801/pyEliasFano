@@ -10,7 +10,7 @@ except(IOError, ImportError):
 
 setup(
     name='pyEliasFano',
-    version='0.0.6',
+    version='0.0.7',
     description='pyEliasFano offers quasi-succinct represenations for monotone non-decreasing sequences of integers.',
     long_description=long_description,
     long_description_content_type=long_description_content_type,
@@ -20,9 +20,8 @@ setup(
     license='CC BY-NC-SA 4.0',
     packages=['pyEliasFano'],
     install_requires=['typing',
-                      'gmpy2',
-                      'bitarray',
-                      'unary_coding'
+                      'numpy',
+                      'bitarray'
                       ],
 
     classifiers=[ ],
