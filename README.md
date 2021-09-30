@@ -28,19 +28,19 @@ imports the module.
 integers = sorted([123, 1343, 2141, 35312, 4343434])
 ef = EliasFano(integers)
 ```
-creates an Elias-Fano structure for the sorted ``integers`` list.
+creates an Elias-Fano structure for the sorted ``integers`` list. Note that indexing in EliasFano structures is 1-based!
 
 ### Rank and Select
 ```python
-ef.select(2)
+ef.select(3)
 ```
-returns the integer stored at index position ``2``.
+returns the integer stored at index position ``3``.
 Here we get ``2141``.    
 ```python
 ef.rank(4343434)
 ```
 returns the index position for the given integer if stored within the Elias-Fano structure. 
-Here, we get ``4``.
+Here, we get ``5``.
 
 ### nextGEQ and nextLEQ
 ```python
