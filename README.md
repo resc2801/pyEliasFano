@@ -28,30 +28,48 @@ imports the module.
 integers = sorted([123, 1343, 2141, 35312, 4343434])
 ef = EliasFano(integers)
 ```
-creates an Elias-Fano structure for the sorted ``integers`` list. Note that indexing in EliasFano structures is 1-based!
+creates an Elias-Fano structure for the sorted ``integers`` list. 
 
-### Rank and Select
+### Access
+A single element stored within the EliasFano structure can be accessed using the ``select`` method
 ```python
 ef.select(3)
 ```
-returns the integer stored at index position ``3``.
-Here we get ``2141``.    
+or the subscript operator
+```python
+ef[3]
+```
+{% hint style="info" %}
+Indexing in an EliasFano structure is one-based!
+% endhint %}
+
+The EliasFano structure is also iterable. You can easily loop through the elements stored in an EliasFano structure
+```python
+for v in iter(ef):
+    print(v)    
+```
+or return all elements at once. 
+```python
+list(iter(ef))
+```
+
+### Rank
 ```python
 ef.rank(4343434)
 ```
-returns the index position for the given integer if stored within the Elias-Fano structure. 
+returns the index position for the given integer iff stored within the Elias-Fano structure. 
 Here, we get ``5``.
 
-### nextGEQ and nextLEQ
+### nextGEQ
 ```python
 ef.nextGEQ(1345)
 ```
-returns the smallest integer stored in the Elias-Fano structure that is larger than the given integer. 
-
+returns the smallest integer stored in the Elias-Fano structure that is larger than or equal to the given integer. 
+### nextLEQ
 ```python
 ef.nextLEQ(4343420)
 ```
-returns the largest integer stored in the Elias-Fano structure that is smaller than the given integer.
+returns the largest integer stored in the Elias-Fano structure that is smaller than or equal to the given integer.
 Here, we get ``35312``. 
 
 # Citation

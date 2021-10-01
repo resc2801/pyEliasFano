@@ -1,6 +1,6 @@
 import math
 from functools import reduce
-from typing import List
+from typing import List, Iterator
 
 import numpy as np
 from bitarray import bitarray
@@ -135,6 +135,17 @@ class EliasFano:
             return self.select(self._n)
         else:
             return x if x == self.nextGEQ(x) else self.select(max(1, self.rank(self.nextGEQ(x)) - 1))
+
+    def __getitem__(self, k: int) -> int:
+        return self.select(k)
+
+    def __len__(self) -> int:
+        return self._n
+
+    def __iter__(self) -> Iterator[int]:
+        for i in range(1, self._n + 1):
+            yield self[i]
+
 
     def _encode_upper_bits(self, numbers: List[int]):
         """
