@@ -39,9 +39,8 @@ or the subscript operator
 ```python
 ef[3]
 ```
-{% hint style="info" %}
-Indexing in an EliasFano structure is one-based!
-% endhint %}
+
+> **_NOTE:_**  Indexing in an EliasFano structure is one-based!
 
 The EliasFano structure is also iterable. You can easily loop through the elements stored in an EliasFano structure
 ```python
