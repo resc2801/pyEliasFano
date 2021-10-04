@@ -11,7 +11,7 @@ if __name__ == "__main__":
     save(ef, "example_elias_fano.pickle")
 
     assert [ef.select(ef.rank(v)) for v in values] == values
-    assert [ ef.rank(ef.select(i)) for i in range(1,len(values)+1)] == list(range(1,len(values)+1))
+    assert [ef.rank(ef.select(i)) for i in range(len(values))] == list(range(len(values)))
 
     # nextGEQ(x)
     assert ef.nextGEQ(0) == 123

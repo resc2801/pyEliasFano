@@ -30,7 +30,7 @@ class EliasFano:
         self._n = len(numbers)
 
         # size of universe
-        self._u = 2**(math.ceil(math.log2(numbers[-1])))
+        self._u = 2**(numbers[-1].bit_length())
 
         # number of upper bits per sequence element
         self._upper_bits = math.ceil(math.log2(self._n))
@@ -51,14 +51,17 @@ class EliasFano:
         :param k: index of integer to be reconstructed.
         :return: k-th stored integer
         """
-        if not(0 < k <= self._n):
-            raise IndexError(f"Use any k ∈ [1,..,{self._n}].")
+        if not(0 <= k < self._n):
+            raise IndexError(f"Use any k ∈ [0,..,{self._n - 1}].")
 
         # for lower part simply jump to the corresponding bits in self._inferiors
-        inferior = ba2int(self._inferiors[(self._lower_bits * (k-1)):(self._lower_bits * k)])
+        if self._lower_bits == 0:
+            inferior = 0
+        else:
+            inferior = ba2int(self._inferiors[(self._lower_bits * k):(self._lower_bits * (k+1))])
 
         # To compute the higher part we need to perform a select_1(k) - k on self._superiors
-        superior = count_n(self._superiors, k) - k    # returns lowest index i for which a[:i].count() == n
+        superior = count_n(self._superiors, (k+1)) - (k+1)    # returns lowest index i for which a[:i].count() == n
 
         return (superior << self._lower_bits) | inferior
 
@@ -68,7 +71,7 @@ class EliasFano:
         :param x: integer
         :return: index of x to be reconstructed.
         """
-        if not(self.select(1) <= x <= self.select(self._n)):
+        if not(self.select(0) <= x <= self.select(self._n - 1)):
             raise ValueError(f"{x} ∉ EF.")
 
         # split x into upper_bits and lower_bits
@@ -83,8 +86,12 @@ class EliasFano:
 
         # loop through the bucket and search for lower bits of x
         for k in range(a, b):
-            if ba2int(self._inferiors[(self._lower_bits * k):(self._lower_bits * (k+1))]) == inf:
-                return k+1
+            if self._lower_bits == 0:
+                inferior = 0
+            else:
+                inferior = ba2int(self._inferiors[(self._lower_bits * k):(self._lower_bits * (k+1))])
+            if inferior == inf:
+                return k
 
         raise ValueError(f"{x} ∉ EF.")
 
@@ -94,16 +101,16 @@ class EliasFano:
         :param x: integer
         :return: min{y ∈ EF : y ≥ x}
         """
-        if not(x <= self.select(self._n)):
+        if not(x <= self.select(self._n - 1)):
             raise ValueError(f"∄y: min{{y ∈ EF: y ≥ {x}}}.")
 
-        if x <= self.select(1):
-            return self.select(1)
+        if x <= self.select(0):
+            return self.select(0)
 
-        elif x == self.select(self._n):
-            return self.select(self._n)
+        elif x == self.select(self._n - 1):
+            return self.select(self._n - 1)
 
-        elif self.select(1) < x < self.select(self._n):
+        elif self.select(0) < x < self.select(self._n - 1):
             # split x into upper_bits and lower_bits
             sup, inf = ((x >> self._lower_bits) & ((2 ** self._upper_bits) - 1), (x & ((2 ** self._lower_bits) - 1)))
 
@@ -117,10 +124,10 @@ class EliasFano:
             # loop through the bucket and search for lower_bits >= x
             for k in range(a, b):
                 if ba2int(self._inferiors[(self._lower_bits * k):(self._lower_bits * (k + 1))]) >= inf:
-                    return self.select(k + 1)
+                    return self.select(k)
 
             # if bucket did not contain nextGEQ(x), we take select(b+1)
-            return self.select(b+1)
+            return self.select(b)
 
     def nextLEQ(self, x: int):
         """
@@ -128,13 +135,13 @@ class EliasFano:
         :param x: integer
         :return: max{y ∈ EF : x ≥ y}
         """
-        if not(x >= self.select(1)):
+        if not(x >= self.select(0)):
             raise ValueError(f"∄y: max{{y ∈ EF : {x} ≥ y}}")
 
-        if x >= self.select(self._n):
-            return self.select(self._n)
+        if x >= self.select(self._n - 1):
+            return self.select(self._n - 1)
         else:
-            return x if x == self.nextGEQ(x) else self.select(max(1, self.rank(self.nextGEQ(x)) - 1))
+            return x if x == self.nextGEQ(x) else self.select(max(0, self.rank(self.nextGEQ(x)) - 1))
 
     def __getitem__(self, k: int) -> int:
         return self.select(k)
@@ -143,9 +150,14 @@ class EliasFano:
         return self._n
 
     def __iter__(self) -> Iterator[int]:
-        for i in range(1, self._n + 1):
+        for i in range(self._n):
             yield self[i]
 
+    def bit_length(self):
+        return len(self._superiors) + len(self._inferiors)
+
+    def compression_ratio(self):
+        return self.bit_length() / (self._n * (math.log2(self._u)))
 
     def _encode_upper_bits(self, numbers: List[int]):
         """
@@ -158,9 +170,10 @@ class EliasFano:
 
         # represent upper bits for each sequence element in negated unary
         (bins, counts) = np.unique(superiors, return_counts=True)
+        (bins, counts) = bins.tolist(), counts.tolist()
         negated_unary_upper_bits = [0] * (2 ** self._upper_bits)
-        for i in range(0, bins.shape[0]):
-            negated_unary_upper_bits[bins[i]] = (((2 ** counts[i]) - 1) << 1).item()
+        for i in range(0, len(bins)):
+            negated_unary_upper_bits[bins[i]] = (((2 ** counts[i]) - 1) << 1)
 
         # return negated unary upper bits for all sequence items as single bitarray
         return reduce(lambda a, b: a + b, list(map(int2ba, negated_unary_upper_bits)), bitarray())
@@ -171,7 +184,8 @@ class EliasFano:
         inferiors = [(v & ((2 ** self._lower_bits) - 1)) for v in numbers]
 
         # store lower bits in fixed width into bitarray
-        fixed_width_lower_bits = [ zeros(self._lower_bits - v.bit_length()) + int2ba(v) for v in inferiors]
+        # TODO: this is inefficient!
+        fixed_width_lower_bits = [bitarray(("{:0%db}" % self._lower_bits).format(num)) for num in inferiors]
 
         return reduce(lambda a, b: a + b, fixed_width_lower_bits, bitarray())
 

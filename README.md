@@ -31,16 +31,23 @@ ef = EliasFano(integers)
 creates an Elias-Fano structure for the sorted ``integers`` list. 
 
 ### Access
-A single element stored within the EliasFano structure can be accessed using the ``select`` method
+The ``i``th element from the original ``integers`` list can be retrieved from the EliasFano structure using the ``select(i)`` method
 ```python
 ef.select(3)
 ```
-or the subscript operator
+or using subscript operator
 ```python
 ef[3]
 ```
+<<<<<<< Updated upstream
 
 **_NOTE:_**  Indexing in an EliasFano structure is one-based!
+=======
+As a side note, the following assertion will always hold.
+```python
+assert [ef.select(ef.rank(v)) for v in integers] == integers
+```
+>>>>>>> Stashed changes
 
 The EliasFano structure is also iterable. You can easily loop through the elements stored in an EliasFano structure
 ```python
@@ -57,7 +64,12 @@ list(iter(ef))
 ef.rank(4343434)
 ```
 returns the index position for the given integer iff stored within the Elias-Fano structure. 
-Here, we get ``5``.
+Here, we get ``4``.
+
+As a side note, the following assertion will always hold.
+```python
+assert [ef.rank(ef.select(i)) for i in range(len(integers))]
+```
 
 ### nextGEQ
 ```python
