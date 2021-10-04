@@ -9,3 +9,4 @@ __author__ = 'René Schubotz'
 __credits__ = 'German Research Centre for Artificial Intelligence'
 
 from .EliasFano import *
+from .UniformPartitionedEliasFano import *
