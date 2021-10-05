@@ -10,7 +10,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S')
 
 
-class UniformPartitionedEliasFano:
+class UniformlyPartitionedEliasFano:
     """
     The basic idea is to partition the sequence S into m/b chunks of b consecutive integers each,
     except possibly the last one.
@@ -51,8 +51,7 @@ class UniformPartitionedEliasFano:
 
     def select(self, i: int) -> int:
         """
-        Return i-th integer stored in this uniformly partitioned Elias-Fano structure.
-        Note that we use 0-based indexing!
+        Return i-th integer stored in this uniformly-partitioned EF structure. Indexing is zero-based.
         :param i: index of integer to be reconstructed.
         :return: i-th integer in sequence
         """
@@ -69,6 +68,44 @@ class UniformPartitionedEliasFano:
         # If e is the value at this position, then we conclude that the value S[i] is equal to L[j]+e
         return self._level_1[j] + e
 
+    def rank(self, x: int) -> int:
+        """
+        Return the index i within the uniformly-partitioned EF structure for given integer x.
+        :param x: integer
+        :return: index of x to be reconstructed.
+        """
+        if not(self.select(0) <= x <= self.select(self._n - 1)):
+            raise ValueError(f"{x} ∉ EF.")
+
+        try:
+            # let j be the index of the chunk that might contain x
+            j = self._level_1.rank(self._level_1.nextLEQ(x))
+
+            # the j-th chunk contains e = x - L[j] iff x is contained within the uniformly-partitioned EF structure
+            e = x-self._level_1.select(j)
+
+            # let k be the index of e = x-L[j] within the j-th chunk
+            k = self._level_2[j].rank(e)
+
+            return (j * self._b) + k
+
+        except ValueError:
+            raise ValueError(f"{x} ∉ EF.")
+
+    def bit_length(self):
+        """
+        Return the combined bit lengths of the first and second level EF structures
+        of this uniformly-partitioned EF structure.
+        """
+        return self._level_1.bit_length() + sum(ef2.bit_length() for ef2 in (self._level_2.values()))
+
+    def compression_ratio(self):
+        """
+        Return the data compression ratio achieved with this uniformly-partitioned EF structure.
+        Data compression ratio is defined as the ratio between the uncompressed size and compressed size.
+        """
+        return (self._n * (math.log2(self._u))) / self.bit_length()
+
     def __getitem__(self, i: int) -> int:
         self.select(i)
 
@@ -78,10 +115,6 @@ class UniformPartitionedEliasFano:
                                            iter(self._level_2.values()))))
 
     def __len__(self) -> int:
-        return len(self._level_1) + sum(len(ef2) for ef2 in (self._level_2.values()))
+        return sum(len(ef2) for ef2 in (self._level_2.values()))
 
-    def bit_length(self):
-        return self._level_1.bit_length() + sum(ef2.bit_length() for ef2 in (self._level_2.values()))
 
-    def compression_ratio(self):
-        return self.bit_length() / (self._n * (math.log2(self._u)))
