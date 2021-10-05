@@ -15,7 +15,7 @@ All variants support the following operations:
 - ``nextLEQ(x)``: fast access to the largest integer of the sequence that is smaller or equal than ``x``
 
 ## Installation
-Install from PyPi
+Install from PyPi using
 ```bash
 pip install pyEliasFano
 ```
@@ -36,21 +36,34 @@ creates a classical Elias-Fano structure ``ef0`` as well as an uniformly-partiti
 ### Access
 The ``i``th element from the original ``integers`` sequence can be retrieved from an Elias-Fano structure ``ef`` using its ``select(i)`` method
 ```python
-ef.select(3)
+ef0.select(3)
+>>> 35312
+
+ef0.select(0)
+>>> 123
 ```
 or using subscript operator
 ```python
-ef[3]
+ef1[3]
+>>> 35312
 ```
 
-An Elias-Fano structure ``ef`` is also iterable. You can easily loop through the stored elements stored 
+An Elias-Fano structure ``ef`` is also iterable. 
+
+You can easily loop through the stored elements stored 
 ```python
-for val in iter(ef):
-    print(val)    
+ef_iter = iter(ef0)
+
+next(ef_iter)
+>>> 123
+
+next(ef_iter)
+>>> 1343   
 ```
 or return all stored elements at once
 ```python
-list(iter(ef))
+list(iter(ef0))
+>>> [123, 1343, 2141, 35312, 4343434]
 ```
 As a side note, the following assertion will always hold:
 ```python
@@ -59,11 +72,15 @@ assert [ef.select(ef.rank(v)) for v in integers] == integers
 
 ### Rank
 Given an integer ``x``, we can query the index position of ``x`` within an Elias-Fano structure ``ef`` using its ``rank(x)`` method.
+
 For example,
 ```python
 ef0.rank(4343434)
+>>> 4
+
+ef1.rank(123)
+>>> 0
 ```
-returns index position ``4``. 
 
 As a side note, the following assertion will always hold:
 ```python
@@ -72,19 +89,30 @@ assert [ef.rank(ef.select(i)) for i in range(len(integers))]
 
 ### nextGEQ
 Given an integer ``x``, we can query the smallest integer stored within an Elias-Fano structure ``ef`` that is larger than or equal to ``x`` using the ``nextGEQ(x)``method.
+
 For example,
 ```python
 ef0.nextGEQ(1345)
+>>> 2141
+
+ef0.nextGEQ(4343434)
+>>> 4343434
+
+ef1.nextGEQ(2)
+>>> 123
 ```
-will return ``2141``.  
 
 ### nextLEQ
 Given an integer ``x``, we can query the largest integer stored within an Elias-Fano structure ``ef`` that is smaller than or equal to ``x`` using the ``nextLEQ(x)``method.
+
 For example,
 ```python
-ef.nextLEQ(4343420)
+ef0.nextLEQ(4343420)
+>>> 35312
+
+ef0.nextLEQ(123)
+>>> 123
 ```
-will return ``35312``.
 
 # Citation
 ```bibtex
