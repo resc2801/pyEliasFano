@@ -1,37 +1,40 @@
 # pyEliasFano
 [![DOI](https://zenodo.org/badge/367291041.svg)](https://zenodo.org/badge/latestdoi/367291041)
 
-pyEliasFano offers a **quasi-succinct** represenation for a monotone non-decreasing sequence of n integers from 
-the universe [0 . . . m) occupying 2*n+n*ceil(log2(m/n)) bits.
+pyEliasFano offers **quasi-succinct** representations for monotone non-decreasing sequences of n integers from 
+a universe [0 . . . m). 
 
-![](https://www.antoniomallia.it/uploads/Elias-Fano.png)
-*by Antonio Mallia, 2018*
+We currently support the following variants of Elias-Fano indexing:
+* ``pyEliasFano.EliasFano``: the classical Elias-Fano representation occupying occupying 2*n+n*ceil(log2(m)/n) bits 
+* ``pyEliasFano.UniformlyPartitionedEliasFano``: an uniformly-partitioned Elias-Fano representation 
 
-It supports the following operations:
-- **select(k)**: nearly constant time access to the k-th element,
-- **rank(x)**: access to the index within the structure for given integer x.
-- **nextGEQ(x)**: fast access to the smallest integer of the sequence that is greater or equal than a given x
-- **nextLEQ(x)**: fast access to the largest integer of the sequence that is smaller or equal than a given x
+All variants support the following operations:
+- ``select(i)``: fast access to the ``i``-th element of the integer sequence,
+- ``rank(x)``: queries the index position of ``x`` iff stored within the given Elias-Fano structure 
+- ``nextGEQ(x)``: fast access to the smallest integer of the sequence that is greater or equal than ``x``
+- ``nextLEQ(x)``: fast access to the largest integer of the sequence that is smaller or equal than ``x``
 
 ## Installation
+Install from PyPi
 ```bash
 pip install pyEliasFano
 ```
 
 ## Usage
 ```python
-from pyEliasFano import EliasFano
+from pyEliasFano import EliasFano, UniformlyPartitionedEliasFano
 ```
 imports the module.
 
 ```python
 integers = sorted([123, 1343, 2141, 35312, 4343434])
-ef = EliasFano(integers)
+ef0 = EliasFano(integers)
+ef1 = UniformlyPartitionedEliasFano(integers)
 ```
-creates an Elias-Fano structure for the sorted ``integers`` list. 
+creates a classical Elias-Fano structure ``ef0`` as well as an uniformly-partitioned Elias-Fano structure ``ef1`` for the **sorted** ``integers`` sequence. 
 
 ### Access
-The ``i``th element from the original ``integers`` list can be retrieved from the EliasFano structure using the ``select(i)`` method
+The ``i``th element from the original ``integers`` sequence can be retrieved from an Elias-Fano structure ``ef`` using its ``select(i)`` method
 ```python
 ef.select(3)
 ```
@@ -39,49 +42,49 @@ or using subscript operator
 ```python
 ef[3]
 ```
-<<<<<<< Updated upstream
 
-**_NOTE:_**  Indexing in an EliasFano structure is one-based!
-=======
-As a side note, the following assertion will always hold.
+An Elias-Fano structure ``ef`` is also iterable. You can easily loop through the stored elements stored 
 ```python
-assert [ef.select(ef.rank(v)) for v in integers] == integers
+for val in iter(ef):
+    print(val)    
 ```
->>>>>>> Stashed changes
-
-The EliasFano structure is also iterable. You can easily loop through the elements stored in an EliasFano structure
-```python
-for v in iter(ef):
-    print(v)    
-```
-or return all elements at once. 
+or return all stored elements at once
 ```python
 list(iter(ef))
 ```
+As a side note, the following assertion will always hold:
+```python
+assert [ef.select(ef.rank(v)) for v in integers] == integers
+```
 
 ### Rank
+Given an integer ``x``, we can query the index position of ``x`` within an Elias-Fano structure ``ef`` using its ``rank(x)`` method.
+For example,
 ```python
-ef.rank(4343434)
+ef0.rank(4343434)
 ```
-returns the index position for the given integer iff stored within the Elias-Fano structure. 
-Here, we get ``4``.
+returns index position ``4``. 
 
-As a side note, the following assertion will always hold.
+As a side note, the following assertion will always hold:
 ```python
 assert [ef.rank(ef.select(i)) for i in range(len(integers))]
 ```
 
 ### nextGEQ
+Given an integer ``x``, we can query the smallest integer stored within an Elias-Fano structure ``ef`` that is larger than or equal to ``x`` using the ``nextGEQ(x)``method.
+For example,
 ```python
-ef.nextGEQ(1345)
+ef0.nextGEQ(1345)
 ```
-returns the smallest integer stored in the Elias-Fano structure that is larger than or equal to the given integer. 
+will return ``2141``.  
+
 ### nextLEQ
+Given an integer ``x``, we can query the largest integer stored within an Elias-Fano structure ``ef`` that is smaller than or equal to ``x`` using the ``nextLEQ(x)``method.
+For example,
 ```python
 ef.nextLEQ(4343420)
 ```
-returns the largest integer stored in the Elias-Fano structure that is smaller than or equal to the given integer.
-Here, we get ``35312``. 
+will return ``35312``.
 
 # Citation
 ```bibtex
