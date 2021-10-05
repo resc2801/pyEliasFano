@@ -183,9 +183,31 @@ class EliasFano:
         # the lower bits for each sequence element
         inferiors = [(v & ((2 ** self._lower_bits) - 1)) for v in numbers]
 
-        # store lower bits in fixed width into bitarray
-        # TODO: this is inefficient!
+        # store lower bits in fixed width representation into a bitarray
         fixed_width_lower_bits = [bitarray(("{:0%db}" % self._lower_bits).format(num)) for num in inferiors]
+
+        # inferiors = random.sample(range(0, 2**32), 1000)
+        # bit_size = max(inferiors).bit_length()
+        # timeit.timeit('[bitarray.bitarray(("{:0%db}" % 15).format(num)) for num in inferiors]',
+        #               setup="from __main__ import bitarray, inferiors",
+        #               number=1000)
+        # >>> 0.8733276989996739
+
+        # fixed_width_lower_bits = [zeros(self._lower_bits - t[0]) + t[1] for t in zip(map(int.bit_length, inferiors), map(int2ba, inferiors))]
+        #
+        # timeit.timeit('[zeros(lower_bits - t[0]) + t[1] for t in zip(map(int.bit_length, inferiors), map(int2ba, inferiors))]',
+        #               setup='from __main__ import inferiors, zeros, lower_bits, int2ba',
+        #               number=1000)
+        #
+        # >>> 2.907987921000313
+
+        # fixed_width_lower_bits = [zeros(self._lower_bits - i.bit_length()) + int2ba(i) for i in inferiors]
+        #
+        # timeit.timeit('[zeros(lower_bits - i.bit_length()) + int2ba(i) for i in inferiors]',
+        #               setup='from __main__ import inferiors, zeros, int2ba, lower_bits',
+        #               number=1000)
+        #
+        # >>> 2.8124131949998628
 
         return reduce(lambda a, b: a + b, fixed_width_lower_bits, bitarray())
 
