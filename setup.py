@@ -21,7 +21,8 @@ setup(
     packages=['pyEliasFano'],
     install_requires=['typing',
                       'numpy',
-                      'bitarray'
+                      'bitarray',
+                      'more_itertools',
                       ],
 
     classifiers=[ ],

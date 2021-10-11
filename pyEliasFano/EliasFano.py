@@ -1,11 +1,9 @@
 import math
-from functools import reduce
+from collections import Counter
+from itertools import accumulate, islice, chain
 from typing import List, Iterator
 
-import numpy as np
-from bitarray import bitarray
-from bitarray.util import ba2int
-from bitarray.util import int2ba, zeros, count_n
+from more_itertools import locate, first, nth
 
 
 class EliasFano:
@@ -25,123 +23,151 @@ class EliasFano:
         Construct an Elias-Fano structure for the given sorted list of integers.
         :param numbers: list of integers SORTED IN ASCENDING ORDER
         """
-
         # sequence length
         self._n = len(numbers)
 
         # size of universe
-        self._u = 2**(numbers[-1].bit_length())
+        self._u = 2 ** max(1, numbers[-1].bit_length())
 
         # number of upper bits per sequence element
         self._upper_bits = math.ceil(math.log2(self._n))
 
         # number of lower bits per sequence element
-        self._lower_bits = math.floor(math.log2(self._u / self._n))
+        self._lower_bits = max(0, math.floor(math.log2(self._u / self._n)))
 
         # upper bits of each sequence element in negated unary encoding
-        self._superiors = self._encode_upper_bits(numbers)
+        self._encode_upper_bits(numbers)
 
         # lower bits of each sequence element in fixed width representation
-        self._inferiors = self._encode_lower_bits(numbers)
+        self._encode_lower_bits(numbers)
 
     def select(self, k: int) -> int:
         """
         Return k-th integer stored in this Elias-Fano structure.
-        Note that we use 1-based indexing!
         :param k: index of integer to be reconstructed.
         :return: k-th stored integer
         """
-        if not(0 <= k < self._n):
+        if not (0 <= k < self._n):
             raise IndexError(f"Use any k ∈ [0,..,{self._n - 1}].")
 
-        # for lower part simply jump to the corresponding bits in self._inferiors
-        if self._lower_bits == 0:
-            inferior = 0
-        else:
-            inferior = ba2int(self._inferiors[(self._lower_bits * k):(self._lower_bits * (k+1))])
+        # for lower part simply take self._inferiors[k], defaults to 0 in case self._lower_bits == 0
+        inferior = nth(iter(self._inferiors), k, 0)
 
-        # To compute the higher part we need to perform a select_1(k) - k on self._superiors
-        superior = count_n(self._superiors, (k+1)) - (k+1)    # returns lowest index i for which a[:i].count() == n
+        # the higher part is index of the bucket with accumulated popCount >= k, defaults to 0 iff self._upper_bits == 0
+        superior = first(locate(islice(iter(self._superiors_prefixSums), 1, None), lambda cnt: cnt > k), 0)
 
         return (superior << self._lower_bits) | inferior
 
-    def rank(self, x: int) -> int:
+    def rank(self, x: int) -> List[int]:
         """
-        Return the index within the Elias-Fano structure for given integer x.
+        Return the indices within the Elias-Fano structure for given integer x.
         :param x: integer
-        :return: index of x to be reconstructed.
+        :return: list of indices of x in the Elias-Fano structure.
         """
-        if not(self.select(0) <= x <= self.select(self._n - 1)):
-            raise ValueError(f"{x} ∉ EF.")
 
         # split x into upper_bits and lower_bits
-        sup, inf = ((x >> self._lower_bits) & ((2 ** self._upper_bits) - 1), (x & ((2 ** self._lower_bits) - 1)))
+        sup_x = (x >> self._lower_bits) & ((2 ** self._upper_bits) - 1)
+        inf_x = (x & ((2 ** self._lower_bits) - 1))
 
-        # fetch the correct bucket of lower bits
-        b = self._superiors[:list(self._superiors.itersearch(zeros(1)))[sup]].count(1)
-        if sup > 0:
-            a = self._superiors[:list(self._superiors.itersearch(zeros(1)))[sup-1]].count(1)
+        # count elements in EF structure with sup_x as upper_bits
+        a = max(0, self._superiors_prefixSums[sup_x])
+        b = min(self._superiors_prefixSums[sup_x + 1], len(self._inferiors))
+
+        if self._lower_bits > 0:
+            return list(map(lambda k: a + k,
+                            locate(islice(self._inferiors, a, b),
+                                   pred=lambda inf: inf == inf_x)))
         else:
-            a = 0
+            return list(range(a, b))
 
-        # loop through the bucket and search for lower bits of x
-        for k in range(a, b):
-            if self._lower_bits == 0:
-                inferior = 0
-            else:
-                inferior = ba2int(self._inferiors[(self._lower_bits * k):(self._lower_bits * (k+1))])
-            if inferior == inf:
-                return k
-
-        raise ValueError(f"{x} ∉ EF.")
-
-    def nextGEQ(self, x):
+    def nextGEQ(self, x) -> int:
         """
         Return the smallest integer stored in this Elias-Fano structure that is greater or equal than x.
         :param x: integer
         :return: min{y ∈ EF : y ≥ x}
         """
-        if not(x <= self.select(self._n - 1)):
+        if not (x <= self.select(self._n - 1)):
             raise ValueError(f"∄y: min{{y ∈ EF: y ≥ {x}}}.")
 
         if x <= self.select(0):
             return self.select(0)
 
-        elif x == self.select(self._n - 1):
-            return self.select(self._n - 1)
+        # split x into upper_bits and lower_bits
+        sup_x = (x >> self._lower_bits) & ((2 ** self._upper_bits) - 1)
+        inf_x = (x & ((2 ** self._lower_bits) - 1))
 
-        elif self.select(0) < x < self.select(self._n - 1):
-            # split x into upper_bits and lower_bits
-            sup, inf = ((x >> self._lower_bits) & ((2 ** self._upper_bits) - 1), (x & ((2 ** self._lower_bits) - 1)))
+        # count elements in EF structure with sup_x as upper_bits
+        a = max(0, self._superiors_prefixSums[sup_x])
+        b = min(self._superiors_prefixSums[sup_x + 1], len(self._inferiors))
 
-            # fetch the correct bucket of lower bits
-            b = self._superiors[:list(self._superiors.itersearch(zeros(1)))[sup]].count(1)
-            if sup > 0:
-                a = self._superiors[:list(self._superiors.itersearch(zeros(1)))[sup - 1]].count(1)
-            else:
-                a = 0
+        k = min(first(map(lambda i: a + i, # loop through bucket and search for inf_bits >= x
+                          locate(islice(self._inferiors, a, b),
+                                 pred=lambda inf: inf >= inf_x)), self._n),
+                b)  # if bucket did not contain nextGEQ(x), we take select(b)
 
-            # loop through the bucket and search for lower_bits >= x
-            for k in range(a, b):
-                if ba2int(self._inferiors[(self._lower_bits * k):(self._lower_bits * (k + 1))]) >= inf:
-                    return self.select(k)
+        return self.select(k)
 
-            # if bucket did not contain nextGEQ(x), we take select(b+1)
-            return self.select(b)
-
-    def nextLEQ(self, x: int):
+    def nextLEQ(self, x: int) -> int:
         """
         Return the largest integer stored in this Elias-Fano structure that is smaller or equal than x.
         :param x: integer
         :return: max{y ∈ EF : x ≥ y}
         """
-        if not(x >= self.select(0)):
+        if not (x >= self.select(0)):
             raise ValueError(f"∄y: max{{y ∈ EF : {x} ≥ y}}")
 
         if x >= self.select(self._n - 1):
             return self.select(self._n - 1)
-        else:
-            return x if x == self.nextGEQ(x) else self.select(max(0, self.rank(self.nextGEQ(x)) - 1))
+
+        if x == self.nextGEQ(x):
+            return x
+
+        return self.select(max(0, first(self.rank(self.nextGEQ(x))) - 1))
+
+    def bit_length(self):
+        """
+        Number of bits needed.
+        """
+        return sum(map(lambda ones: ones + 1, self._superiors)) + self._lower_bits * len(self._lower_bits)
+
+    def compression_ratio(self):
+        """
+        Compression ratio is defined as the ratio between the uncompressed size and compressed size
+        """
+        return (self._n * (math.log2(self._u))) / self.bit_length()
+
+    def _encode_upper_bits(self, numbers: List[int]):
+        """
+        Encodes the upper bits of each sequence element into a bitarray
+        :param numbers: list of integers SORTED IN ASCENDING ORDER
+        :return: bitarray containing all upper bits in negated unary encoding
+        """
+
+        # empty list if we do not use upper_bits
+        self._superiors = []
+
+        if self._upper_bits > 0:
+            # init all upper bit buckets with 0
+            self._superiors = [0] * (2 ** self._upper_bits)
+
+            # get the upper bits for each sequence element
+            superiors_iter = map(lambda x: ((x >> self._lower_bits) & ((2 ** self._upper_bits) - 1)), numbers)
+
+            # encode the count of `superior` bits (in negated unary representation when serializing)
+            for (superior, count) in Counter(superiors_iter).items():
+                self._superiors[superior] = count
+
+            # auxiliary prefix_sum array to speed up rank computation
+            self._superiors_prefixSums = [0] + list(accumulate(self._superiors))
+
+    def _encode_lower_bits(self, numbers: List[int]):
+
+        # empty list if we do not use lower_bits
+        self._inferiors = []
+
+        if self._lower_bits > 0:
+            # the lower bits for each sequence element
+            self._inferiors = list(map(lambda x: (x & ((2 ** self._lower_bits) - 1)), numbers))
 
     def __getitem__(self, k: int) -> int:
         return self.select(k)
@@ -150,67 +176,12 @@ class EliasFano:
         return self._n
 
     def __iter__(self) -> Iterator[int]:
-        for i in range(self._n):
-            yield self[i]
-
-    def bit_length(self):
-        return len(self._superiors) + len(self._inferiors)
-
-    def compression_ratio(self):
-        return self.bit_length() / (self._n * (math.log2(self._u)))
-
-    def _encode_upper_bits(self, numbers: List[int]):
-        """
-        Encodes the upper bits of each sequence element into a bitarray
-        :param numbers: list of integers SORTED IN ASCENDING ORDER
-        :return: bitarray containing all upper bits in negated unary encoding
-        """
-        # the upper bits for each sequence element
-        superiors = [((v >> self._lower_bits) & ((2 ** self._upper_bits) - 1)) for v in numbers]
-
-        # represent upper bits for each sequence element in negated unary
-        (bins, counts) = np.unique(superiors, return_counts=True)
-        (bins, counts) = bins.tolist(), counts.tolist()
-        negated_unary_upper_bits = [0] * (2 ** self._upper_bits)
-        for i in range(0, len(bins)):
-            negated_unary_upper_bits[bins[i]] = (((2 ** counts[i]) - 1) << 1)
-
-        # return negated unary upper bits for all sequence items as single bitarray
-        return reduce(lambda a, b: a + b, list(map(int2ba, negated_unary_upper_bits)), bitarray())
-
-    def _encode_lower_bits(self, numbers: List[int]):
-
-        # the lower bits for each sequence element
-        inferiors = [(v & ((2 ** self._lower_bits) - 1)) for v in numbers]
-
-        # store lower bits in fixed width representation into a bitarray
-        fixed_width_lower_bits = [bitarray(("{:0%db}" % self._lower_bits).format(num)) for num in inferiors]
-
-        # inferiors = random.sample(range(0, 2**32), 1000)
-        # bit_size = max(inferiors).bit_length()
-        # timeit.timeit('[bitarray.bitarray(("{:0%db}" % 15).format(num)) for num in inferiors]',
-        #               setup="from __main__ import bitarray, inferiors",
-        #               number=1000)
-        # >>> 0.8733276989996739
-
-        # fixed_width_lower_bits = [zeros(self._lower_bits - t[0]) + t[1] for t in zip(map(int.bit_length, inferiors), map(int2ba, inferiors))]
-        #
-        # timeit.timeit('[zeros(lower_bits - t[0]) + t[1] for t in zip(map(int.bit_length, inferiors), map(int2ba, inferiors))]',
-        #               setup='from __main__ import inferiors, zeros, lower_bits, int2ba',
-        #               number=1000)
-        #
-        # >>> 2.907987921000313
-
-        # fixed_width_lower_bits = [zeros(self._lower_bits - i.bit_length()) + int2ba(i) for i in inferiors]
-        #
-        # timeit.timeit('[zeros(lower_bits - i.bit_length()) + int2ba(i) for i in inferiors]',
-        #               setup='from __main__ import inferiors, zeros, int2ba, lower_bits',
-        #               number=1000)
-        #
-        # >>> 2.8124131949998628
-
-        return reduce(lambda a, b: a + b, fixed_width_lower_bits, bitarray())
-
+        # iterate elements in _superiors, _superiors[k] is the numbers of elements in _inferiors
+        # to fetch and combine with k as their upper_half
+        _inferiors_iter = iter(self._inferiors)
+        return chain.from_iterable(
+            map(lambda sup: [(sup[0] << self._lower_bits) + inf for inf in islice(_inferiors_iter, sup[1])],
+                enumerate(self._superiors)))
 
 def load(file_path: str):
     """
