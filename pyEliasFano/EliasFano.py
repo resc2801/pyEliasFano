@@ -26,7 +26,7 @@ class EliasFano:
         # sequence length
         self._n = len(sorted_integers)
 
-        # size of universe
+        # size of universe (NOTE: python assumes int(0).bit_length() == 0)
         self._u = 2 ** max(1, sorted_integers[-1].bit_length())
 
         # number of upper bits per sequence element
@@ -128,7 +128,7 @@ class EliasFano:
         """
         Number of bits needed.
         """
-        return sum(map(lambda ones: ones + 1, self._superiors)) + self._lower_bits * len(self._lower_bits)
+        return sum(map(lambda ones: ones + 1, self._superiors)) + self._lower_bits * len(self._inferiors)
 
     def compression_ratio(self):
         """
@@ -187,9 +187,8 @@ class EliasFano:
         # to fetch and combine with k as their upper_half
         _inferiors_iter = iter(self._inferiors)
         return chain.from_iterable(
-            map(lambda sup: [(sup[0] << self._lower_bits) + inf for inf in islice(_inferiors_iter, sup[1])],
-                enumerate(self._superiors)))
-
+            map(lambda idx: [(idx << self._lower_bits) + inf for inf in islice(_inferiors_iter, self._superiors[idx])],
+                locate(self._superiors, pred=lambda cnt: cnt > 0)))
 
 def load(file_path: str):
     """
