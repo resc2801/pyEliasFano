@@ -3,7 +3,7 @@ from collections import Counter
 from itertools import accumulate, islice, chain
 from typing import List, Iterator
 
-from more_itertools import locate, first, nth
+from more_itertools import locate, first, nth, unzip
 
 
 class EliasFano:
@@ -13,21 +13,21 @@ class EliasFano:
 
     It supports:
      - select(k): nearly constant time access to the k-th element,
-     - rank(x): access to the index within the structure for given integer x.
+     - rank(x): fast access to the index within the structure for given integer x.
      - nextGEQ(x): fast access to the smallest integer of the sequence that is greater or equal than a given x
      - nextLEQ(x): fast access to the largest integer of the sequence that is smaller or equal than a given x
     """
 
-    def __init__(self, numbers: List[int]):
+    def __init__(self, sorted_integers: List[int]):
         """
         Construct an Elias-Fano structure for the given sorted list of integers.
-        :param numbers: list of integers SORTED IN ASCENDING ORDER
+        :param sorted_integers: list of integers SORTED IN ASCENDING ORDER
         """
         # sequence length
-        self._n = len(numbers)
+        self._n = len(sorted_integers)
 
         # size of universe
-        self._u = 2 ** max(1, numbers[-1].bit_length())
+        self._u = 2 ** max(1, sorted_integers[-1].bit_length())
 
         # number of upper bits per sequence element
         self._upper_bits = math.ceil(math.log2(self._n))
@@ -36,10 +36,8 @@ class EliasFano:
         self._lower_bits = max(0, math.floor(math.log2(self._u / self._n)))
 
         # upper bits of each sequence element in negated unary encoding
-        self._encode_upper_bits(numbers)
-
         # lower bits of each sequence element in fixed width representation
-        self._encode_lower_bits(numbers)
+        self._encode(sorted_integers)
 
     def select(self, k: int) -> int:
         """
@@ -70,8 +68,10 @@ class EliasFano:
         inf_x = (x & ((2 ** self._lower_bits) - 1))
 
         # count elements in EF structure with sup_x as upper_bits
-        a = max(0, self._superiors_prefixSums[sup_x])
-        b = min(self._superiors_prefixSums[sup_x + 1], len(self._inferiors))
+        if self._upper_bits > 0:
+            a, b = (self._superiors_prefixSums[sup_x], self._superiors_prefixSums[sup_x + 1])
+        else:
+            a, b = (0, len(self._inferiors))
 
         if self._lower_bits > 0:
             return list(map(lambda k: a + k,
@@ -136,52 +136,60 @@ class EliasFano:
         """
         return (self._n * (math.log2(self._u))) / self.bit_length()
 
-    def _encode_upper_bits(self, numbers: List[int]):
+    def _encode(self, sorted_integers: List[int]):
         """
-        Encodes the upper bits of each sequence element into a bitarray
-        :param numbers: list of integers SORTED IN ASCENDING ORDER
-        :return: bitarray containing all upper bits in negated unary encoding
+        Compresses a monotone non-decreasing integers lists by using Elias-Fano encoding.
+        :param sorted_integers: list of integers SORTED IN ASCENDING ORDER
         """
+        inferiors_iter, superiors_iter = unzip(
+            map(lambda x: ((x & ((2 ** self._lower_bits) - 1)),
+                           ((x >> self._lower_bits) & ((2 ** self._upper_bits) - 1))),
+                iter(sorted_integers)))
 
-        # empty list if we do not use upper_bits
-        self._superiors = []
+        if self._lower_bits > 0:
+            # the lower bits for each sequence element
+            self._inferiors = list(inferiors_iter)
+        else:
+            # empty list if we do not use lower_bits
+            self._inferiors = []
 
         if self._upper_bits > 0:
-            # init all upper bit buckets with 0
+            # init all upper_bit buckets with 0
             self._superiors = [0] * (2 ** self._upper_bits)
-
-            # get the upper bits for each sequence element
-            superiors_iter = map(lambda x: ((x >> self._lower_bits) & ((2 ** self._upper_bits) - 1)), numbers)
 
             # encode the count of `superior` bits (in negated unary representation when serializing)
             for (superior, count) in Counter(superiors_iter).items():
                 self._superiors[superior] = count
+        else:
+            # empty list if we do not use upper_bits
+            self._superiors = []
 
-            # auxiliary prefix_sum array to speed up rank computation
-            self._superiors_prefixSums = [0] + list(accumulate(self._superiors))
-
-    def _encode_lower_bits(self, numbers: List[int]):
-
-        # empty list if we do not use lower_bits
-        self._inferiors = []
-
-        if self._lower_bits > 0:
-            # the lower bits for each sequence element
-            self._inferiors = list(map(lambda x: (x & ((2 ** self._lower_bits) - 1)), numbers))
+        # auxiliary prefix_sum array to speed up rank computation
+        self._superiors_prefixSums = [0] + list(accumulate(self._superiors))
 
     def __getitem__(self, k: int) -> int:
+        """
+        Return k-th integer stored in this Elias-Fano structure using subscript operator.
+        """
         return self.select(k)
 
     def __len__(self) -> int:
+        """
+        Return number of integers stored in the Elias-Fano structure.
+        """
         return self._n
 
     def __iter__(self) -> Iterator[int]:
+        """
+        Support for __iter__ and next
+        """
         # iterate elements in _superiors, _superiors[k] is the numbers of elements in _inferiors
         # to fetch and combine with k as their upper_half
         _inferiors_iter = iter(self._inferiors)
         return chain.from_iterable(
             map(lambda sup: [(sup[0] << self._lower_bits) + inf for inf in islice(_inferiors_iter, sup[1])],
                 enumerate(self._superiors)))
+
 
 def load(file_path: str):
     """
