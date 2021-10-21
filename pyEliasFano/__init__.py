@@ -10,6 +10,5 @@ __credits__ = 'German Research Centre for Artificial Intelligence'
 
 from .EliasFano import *
 from .UniformlyPartitionedEliasFano import *
-from .NonUniformlyPartitionedEliasFano import *
 from .MultiLevelEliasFano import *
 from .PermutatingMortonEncoder import *
