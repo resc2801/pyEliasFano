@@ -23,7 +23,7 @@ setup(
                       'numpy',
                       'bitarray',
                       'more_itertools',
-                      ],
+                      'sympy'],
 
     classifiers=[ ],
 )
