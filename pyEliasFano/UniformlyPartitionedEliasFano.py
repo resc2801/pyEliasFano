@@ -110,6 +110,7 @@ class UniformlyPartitionedEliasFano:
         self.select(i)
 
     def __iter__(self) -> Iterator[int]:
+        # combine L[i] with i-th chunk and then add L[i] to each value in i-th chunk
         return chain.from_iterable(map(lambda t: [t[0]+v for v in t[1]],
                                        zip(iter(self._level_1),
                                            iter(self._level_2.values()))))
