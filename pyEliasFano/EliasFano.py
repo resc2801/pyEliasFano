@@ -1,12 +1,12 @@
 import math
 from collections import Counter
-from itertools import accumulate, islice, chain, starmap
+from functools import reduce
+from itertools import accumulate, islice, chain
 from typing import List, Iterator, Tuple
 
-from more_itertools import locate, first, nth, unzip
-
-# (value_bits, dont_care_bits)
-BitPattern = Tuple[int, int]
+import bitarray
+from bitarray import frozenbitarray, bitarray
+from more_itertools import locate, first, nth, unzip, windowed, split_at
 
 
 class EliasFano:
@@ -40,6 +40,8 @@ class EliasFano:
 
         # upper bits of each sequence element in negated unary encoding
         # lower bits of each sequence element in fixed width representation
+        self._inferiors = []
+        self._superiors = []
         self._encode(sorted_integers)
 
     def select(self, k: int) -> int:
@@ -133,16 +135,18 @@ class EliasFano:
         # filter matching upper halves in self._superiors
         if self._upper_bits > 0:
             sup_matches = list(filter(lambda idx: (idx & sup_ignore) == (sup_value & sup_ignore),
-                                 locate(self._superiors, pred=lambda cnt: cnt > 0)))
+                                      locate(self._superiors, pred=lambda cnt: cnt > 0)))
 
             # for each matching upper half, we pair it with its matching lower halves
             matching_elements = list(map(lambda sup_match: (sup_match,
-                                                       filter(
-                                                           lambda inf: (inf & inf_ignore) == (inf_value & inf_ignore),
-                                                           islice(self._inferiors,
-                                                                  self._superiors_prefixSums[sup_match]-self._superiors[sup_match],
-                                                                  self._superiors_prefixSums[sup_match]))),
-                                    sup_matches))
+                                                            filter(
+                                                                lambda inf: (inf & inf_ignore) == (
+                                                                        inf_value & inf_ignore),
+                                                                islice(self._inferiors,
+                                                                       self._superiors_prefixSums[sup_match] -
+                                                                       self._superiors[sup_match],
+                                                                       self._superiors_prefixSums[sup_match]))),
+                                         sup_matches))
 
             # reconstruct stored integer
             return chain.from_iterable(
@@ -174,12 +178,10 @@ class EliasFano:
                 iter(sorted_integers)))
 
         # encode the lower bits for each sequence element; [] if we do not use lower_bits
-        self._inferiors = []
         if self._lower_bits > 0:
             self._inferiors = list(inferiors_iter)
 
         # encode the upper bits for each sequence element; [] if we do not use upper_bits
-        self._superiors = []
         if self._upper_bits > 0:
             # init all upper_bit buckets with 0
             self._superiors = [0] * (2 ** self._upper_bits)
@@ -231,33 +233,117 @@ class EliasFano:
             else:
                 raise ValueError("Empty index!")
 
+    def save(self, file_path: str):
+        """
+        Save given Elias-Fano structure to disk.
+        :param file_path: file to hold the EF structure
+        :return: None
+        """
+        # HEADER
+        #   self._n: 64 bits
+        #   self._lower_bits: 64 bits
+        #   self._upper_bits: 64 bits
+        #   inferiors_byte_count: 64 bits
+        #   superiors_byte_count: 64 bits
+        # DATA
+        #   inferiors_bits: inferiors_byte_count bytes
+        #   superiors_bits: superiors_byte_count bytes
 
-def load(file_path: str):
-    """
-    Load Elias-Fano structure from disk.
-    :param file_path: file storing an Elias-Fano structure
-    :return: an Elias-Fano structure
-    """
-    import os
-    from pickle import load
+        with open(file_path, 'wb') as dump_file:
+            # write HEADER
+            dump_file.write(self._n.to_bytes(8, 'little', signed=False))
+            dump_file.write(self._lower_bits.to_bytes(8, 'little', signed=False))
+            dump_file.write(self._upper_bits.to_bytes(8, 'little', signed=False))
 
-    assert os.path.exists(file_path) and os.path.isfile(file_path), IOError("File path invalid or does not exist.")
+            inferiors_byte_count = 0
+            superiors_byte_count = 0
 
-    obj = load(open(file_path, "rb"))
-    assert isinstance(obj, EliasFano), ValueError("Given file does not store an Elias-Fano structure.")
+            if bool(self._inferiors):
+                inferiors_bits = bitarray(reduce(lambda a, b: a + b,
+                                                 map(lambda inf: ("{0:0%db}" % self._lower_bits).format(inf),
+                                                     self._inferiors)),
+                                          endian='little')
+                inferiors_byte_count = len(inferiors_bits.tobytes())
 
-    return obj
+            if bool(self._superiors):
+                superiors_bits = bitarray(reduce(lambda a, b: a + b,
+                                                 map(lambda sup: ("1" * sup) + "0",
+                                                     self._superiors)),
+                                          endian='little')
 
+                superiors_byte_count = len(superiors_bits.tobytes())
 
-def save(ef_structure: EliasFano, file_path: str):
-    """
-    Save given Elias-Fano structure to disk.
-    :param ef_structure: an Elias-Fano structure
-    :param file_path: file to hold the EF structure
-    :return: None
-    """
-    from pickle import dump
+            dump_file.write(inferiors_byte_count.to_bytes(8, 'little', signed=False))
+            dump_file.write(superiors_byte_count.to_bytes(8, 'little', signed=False))
 
-    assert isinstance(ef_structure, EliasFano), ValueError("Given object is not an Elias-Fano structure.")
+            # write DATA
+            if inferiors_byte_count:
+                # fixed width binary representation for all lower halves
+                inferiors_bits = bitarray(reduce(lambda a, b: a + b,
+                                                 map(lambda inf: ("{0:0%db}" % self._lower_bits).format(inf),
+                                                     self._inferiors)),
+                                          endian='little')
 
-    dump(ef_structure, open(file_path, "wb"))
+                dump_file.write(inferiors_bits.tobytes())
+
+            if superiors_byte_count:
+                # negated unary representation for upper halves
+                superiors_bits = bitarray(reduce(lambda a, b: a + b,
+                                                 map(lambda sup: "1" * sup + "0",
+                                                     self._superiors)),
+                                          endian='little')
+
+                dump_file.write(superiors_bits.tobytes())
+
+    @staticmethod
+    def load(file_path: str):
+        """
+        Load Elias-Fano structure from disk.
+        :param file_path: file storing an Elias-Fano structure
+        :return: an Elias-Fano structure
+        """
+        import os
+
+        assert os.path.exists(file_path) and os.path.isfile(file_path), IOError("File path invalid or does not exist.")
+
+        with open(file_path, "rb") as file:
+            # read HEADER
+            _n = int.from_bytes(file.read(8), 'little', signed=False)
+            _lower_bits = int.from_bytes(file.read(8), 'little', signed=False)
+            _upper_bits = int.from_bytes(file.read(8), 'little', signed=False)
+            inferiors_byte_count = int.from_bytes(file.read(8), 'little', signed=False)
+            superiors_byte_count = int.from_bytes(file.read(8), 'little', signed=False)
+
+            # read DATA
+            _inferiors = []
+            _superiors = []
+
+            if inferiors_byte_count:
+                inferiors = bitarray(endian='little')
+                inferiors.frombytes(file.read(inferiors_byte_count))
+
+                _inferiors = list(map(lambda inf: int("".join(inf), 2),
+                                      windowed(iter(inferiors.to01()), _lower_bits,
+                                               step=_lower_bits)))
+
+            if superiors_byte_count:
+                superiors = bitarray(endian='little')
+                superiors.frombytes(file.read(superiors_byte_count))
+                _superiors = list(map(lambda l: sum(l),
+                                      split_at(iter(superiors),
+                                               lambda v: v == 0, keep_separator=False))
+                                  )[0:-1]
+
+                _superiors_prefixSums = list(accumulate(_superiors))
+
+        # TODO: implement appropriate constructor
+        ef_index = EliasFano([0])
+        ef_index._n = _n
+        ef_index._u = 2 ** max(1, _lower_bits + _upper_bits)
+        ef_index._lower_bits = _lower_bits
+        ef_index._upper_bits = _upper_bits
+        ef_index._inferiors = _inferiors
+        ef_index._superiors = _superiors
+        ef_index._superiors_prefixSums = _superiors_prefixSums
+
+        return ef_index
