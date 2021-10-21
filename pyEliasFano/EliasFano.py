@@ -1,3 +1,4 @@
+import logging
 import math
 from collections import Counter
 from functools import reduce
@@ -233,12 +234,7 @@ class EliasFano:
             else:
                 raise ValueError("Empty index!")
 
-    def save(self, file_path: str):
-        """
-        Save given Elias-Fano structure to disk.
-        :param file_path: file to hold the EF structure
-        :return: None
-        """
+    def to_bytes(self):
         # HEADER
         #   self._n: 64 bits
         #   self._lower_bits: 64 bits
@@ -249,54 +245,70 @@ class EliasFano:
         #   inferiors_bits: inferiors_byte_count bytes
         #   superiors_bits: superiors_byte_count bytes
 
-        with open(file_path, 'wb') as dump_file:
-            # write HEADER
-            dump_file.write(self._n.to_bytes(8, 'little', signed=False))
-            dump_file.write(self._lower_bits.to_bytes(8, 'little', signed=False))
-            dump_file.write(self._upper_bits.to_bytes(8, 'little', signed=False))
+        ba = []
 
-            inferiors_byte_count = 0
-            superiors_byte_count = 0
+        # write HEADER
+        ba.append(self._n.to_bytes(8, 'little', signed=False))
+        ba.append(self._lower_bits.to_bytes(8, 'little', signed=False))
+        ba.append(self._upper_bits.to_bytes(8, 'little', signed=False))
 
-            if bool(self._inferiors):
-                inferiors_bits = bitarray(reduce(lambda a, b: a + b,
-                                                 map(lambda inf: ("{0:0%db}" % self._lower_bits).format(inf),
-                                                     self._inferiors)),
-                                          endian='little')
-                inferiors_byte_count = len(inferiors_bits.tobytes())
+        inferiors_byte_count = 0
+        superiors_byte_count = 0
 
-            if bool(self._superiors):
-                superiors_bits = bitarray(reduce(lambda a, b: a + b,
-                                                 map(lambda sup: ("1" * sup) + "0",
-                                                     self._superiors)),
-                                          endian='little')
+        if bool(self._inferiors):
+            inferiors_bits = bitarray(reduce(lambda a, b: a + b,
+                                             map(lambda inf: ("{0:0%db}" % self._lower_bits).format(inf),
+                                                 self._inferiors)),
+                                      endian='little')
+            inferiors_byte_count = len(inferiors_bits.tobytes())
 
-                superiors_byte_count = len(superiors_bits.tobytes())
+        if bool(self._superiors):
+            superiors_bits = bitarray(reduce(lambda a, b: a + b,
+                                             map(lambda sup: ("1" * sup) + "0",
+                                                 self._superiors)),
+                                      endian='little')
 
-            dump_file.write(inferiors_byte_count.to_bytes(8, 'little', signed=False))
-            dump_file.write(superiors_byte_count.to_bytes(8, 'little', signed=False))
+            superiors_byte_count = len(superiors_bits.tobytes())
 
-            # write DATA
-            if inferiors_byte_count:
-                # fixed width binary representation for all lower halves
-                inferiors_bits = bitarray(reduce(lambda a, b: a + b,
-                                                 map(lambda inf: ("{0:0%db}" % self._lower_bits).format(inf),
-                                                     self._inferiors)),
-                                          endian='little')
+        ba.append(inferiors_byte_count.to_bytes(8, 'little', signed=False))
+        ba.append(superiors_byte_count.to_bytes(8, 'little', signed=False))
 
-                dump_file.write(inferiors_bits.tobytes())
+        # write DATA
+        if inferiors_byte_count:
+            # fixed width binary representation for all lower halves
+            inferiors_bits = bitarray(reduce(lambda a, b: a + b,
+                                             map(lambda inf: ("{0:0%db}" % self._lower_bits).format(inf),
+                                                 self._inferiors)),
+                                      endian='little')
 
-            if superiors_byte_count:
-                # negated unary representation for upper halves
-                superiors_bits = bitarray(reduce(lambda a, b: a + b,
-                                                 map(lambda sup: "1" * sup + "0",
-                                                     self._superiors)),
-                                          endian='little')
+            ba.append(inferiors_bits.tobytes())
 
-                dump_file.write(superiors_bits.tobytes())
+        if superiors_byte_count:
+            # negated unary representation for upper halves
+            superiors_bits = bitarray(reduce(lambda a, b: a + b,
+                                             map(lambda sup: "1" * sup + "0",
+                                                 self._superiors)),
+                                      endian='little')
+
+            ba.append(superiors_bits.tobytes())
+
+        return len(b''.join(ba)), b''.join(ba)
+
+    def to_file(self, file_path: str):
+        """
+        Save given Elias-Fano structure to disk.
+        :param file_path: file to hold the EF structure
+        :return: None
+        """
+        byte_size, all_bytes = self.to_bytes()
+
+        with open(file_path, 'wb') as file:
+            file.write(all_bytes)
+
+        logging.info("Serialized EF index using %s bytes." % byte_size)
 
     @staticmethod
-    def load(file_path: str):
+    def from_file(file_path: str):
         """
         Load Elias-Fano structure from disk.
         :param file_path: file storing an Elias-Fano structure
