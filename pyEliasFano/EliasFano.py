@@ -7,7 +7,7 @@ from typing import List, Iterator, Tuple
 
 import bitarray
 from bitarray import frozenbitarray, bitarray
-from more_itertools import locate, first, nth, unzip, windowed, split_at
+from more_itertools import locate, first, nth, unzip, windowed, split_at, take
 
 
 class EliasFano:
@@ -235,64 +235,145 @@ class EliasFano:
                 raise ValueError("Empty index!")
 
     def to_bytes(self):
-        # HEADER
-        #   self._n: 64 bits
-        #   self._lower_bits: 64 bits
-        #   self._upper_bits: 64 bits
-        #   inferiors_byte_count: 64 bits
-        #   superiors_byte_count: 64 bits
-        # DATA
-        #   inferiors_bits: inferiors_byte_count bytes
-        #   superiors_bits: superiors_byte_count bytes
+        """
+
+        """
+        if bool(self._inferiors):
+            # fixed width binary representation for all lower halves
+            inferiors_bits = int(reduce(lambda a, b: a + b,
+                                        map(lambda inf: ("{0:0%db}" % self._lower_bits).format(inf),
+                                            self._inferiors)),
+                                 2)
+            inferiors_byte_count = max(1, math.ceil(inferiors_bits.bit_length() / 8.0))
+        else:
+            inferiors_byte_count = 0
+
+        if bool(self._superiors):
+            # negated unary representation for upper halves
+            superiors_bits = int(reduce(lambda a, b: a + b,
+                                        map(lambda sup: ("1" * sup) + "0",
+                                            self._superiors)),
+                                 2)
+
+            superiors_byte_count = max(1, math.ceil(superiors_bits.bit_length() / 8.0))
+        else:
+            superiors_byte_count = 0
+
+        rep_size_n = max(1, math.ceil(self._n.bit_length() / 8.0))
+        rep_size_inferiors_byte_count = max(1, math.ceil(inferiors_byte_count.bit_length() / 8.0))
+        rep_size_superiors_byte_count = max(1, math.ceil(superiors_byte_count.bit_length() / 8.0))
 
         ba = []
 
-        # write HEADER
-        ba.append(self._n.to_bytes(8, 'little', signed=False))
-        ba.append(self._lower_bits.to_bytes(8, 'little', signed=False))
-        ba.append(self._upper_bits.to_bytes(8, 'little', signed=False))
+        # HEADER
 
-        inferiors_byte_count = 0
-        superiors_byte_count = 0
+        #   Index type:                     1 byte              EliasFano: 0, MultiLevelEliasFano: 1
+        #   rep_size_n:                     1 byte
+        #   rep_size_inferiors_byte_count:  1 byte
+        #   rep_size_superiors_byte_count:  1 byte
 
-        if bool(self._inferiors):
-            inferiors_bits = bitarray(reduce(lambda a, b: a + b,
-                                             map(lambda inf: ("{0:0%db}" % self._lower_bits).format(inf),
-                                                 self._inferiors)),
-                                      endian='little')
-            inferiors_byte_count = len(inferiors_bits.tobytes())
+        #   self._n:                        (rep_size_n) bytes
+        #   self._lower_bits:               1 byte
+        #   self._upper_bits:               1 byte
 
-        if bool(self._superiors):
-            superiors_bits = bitarray(reduce(lambda a, b: a + b,
-                                             map(lambda sup: ("1" * sup) + "0",
-                                                 self._superiors)),
-                                      endian='little')
+        #   inferiors_byte_count:           (rep_size_inferiors_byte_count) bytes
+        #   superiors_byte_count:           (rep_size_superiors_byte_count) bytes
 
-            superiors_byte_count = len(superiors_bits.tobytes())
+        ba.append(int(0).to_bytes(1, 'little', signed=False))
+        ba.append(rep_size_n.to_bytes(1, 'little', signed=False))
+        ba.append(rep_size_inferiors_byte_count.to_bytes(1, 'little', signed=False))
+        ba.append(rep_size_superiors_byte_count.to_bytes(1, 'little', signed=False))
 
-        ba.append(inferiors_byte_count.to_bytes(8, 'little', signed=False))
-        ba.append(superiors_byte_count.to_bytes(8, 'little', signed=False))
+        ba.append(self._n.to_bytes(rep_size_n, 'little', signed=False))
+        ba.append(self._lower_bits.to_bytes(1, 'little', signed=False))
+        ba.append(self._upper_bits.to_bytes(1, 'little', signed=False))
 
-        # write DATA
+        ba.append(inferiors_byte_count.to_bytes(rep_size_inferiors_byte_count, 'little', signed=False))
+        ba.append(superiors_byte_count.to_bytes(rep_size_superiors_byte_count, 'little', signed=False))
+
+        # DATA
+        #   inferiors_bits:         (inferiors_byte_count) bytes
+        #   superiors_bits:         (superiors_byte_count) bytes
+
         if inferiors_byte_count:
-            # fixed width binary representation for all lower halves
-            inferiors_bits = bitarray(reduce(lambda a, b: a + b,
-                                             map(lambda inf: ("{0:0%db}" % self._lower_bits).format(inf),
-                                                 self._inferiors)),
-                                      endian='little')
-
-            ba.append(inferiors_bits.tobytes())
+            ba.append(inferiors_bits.to_bytes(inferiors_byte_count, 'little', signed=False))
 
         if superiors_byte_count:
-            # negated unary representation for upper halves
-            superiors_bits = bitarray(reduce(lambda a, b: a + b,
-                                             map(lambda sup: "1" * sup + "0",
-                                                 self._superiors)),
-                                      endian='little')
-
-            ba.append(superiors_bits.tobytes())
+            ba.append(superiors_bits.to_bytes(superiors_byte_count, 'little', signed=False))
 
         return len(b''.join(ba)), b''.join(ba)
+
+    @staticmethod
+    def from_bytes(index_bytes: bytearray):
+
+        bytes_iter = iter(index_bytes)
+
+        # HEADER
+        #   Index type:                     1 byte              EliasFano: 0, MultiLevelEliasFano: 1
+        #   rep_size_n:                     1 byte
+        #   rep_size_inferiors_byte_count:  1 byte
+        #   rep_size_superiors_byte_count:  1 byte
+
+        #   self._n:                        (rep_size_n) bytes
+        #   self._lower_bits:               1 byte
+        #   self._upper_bits:               1 byte
+
+        #   inferiors_byte_count:           (rep_size_inferiors_byte_count) bytes
+        #   superiors_byte_count:           (rep_size_superiors_byte_count) bytes
+
+        _index_type = int.from_bytes(take(1, bytes_iter), 'little', signed=False)
+        rep_size_n = int.from_bytes(take(1, bytes_iter), 'little', signed=False)
+        rep_size_inferiors_byte_count = int.from_bytes(take(1, bytes_iter), 'little', signed=False)
+        rep_size_superiors_byte_count = int.from_bytes(take(1, bytes_iter), 'little', signed=False)
+
+        _n = int.from_bytes(take(rep_size_n, bytes_iter), 'little', signed=False)
+        _lower_bits = int.from_bytes(take(1, bytes_iter), 'little', signed=False)
+        _upper_bits = int.from_bytes(take(1, bytes_iter), 'little', signed=False)
+
+        inferiors_byte_count = int.from_bytes(take(rep_size_inferiors_byte_count, bytes_iter), 'little', signed=False)
+        superiors_byte_count = int.from_bytes(take(rep_size_superiors_byte_count, bytes_iter), 'little', signed=False)
+
+        # DATA
+        #   inferiors_bits:         (inferiors_byte_count) bytes
+        #   superiors_bits:         (superiors_byte_count) bytes
+
+        if inferiors_byte_count:
+            inferiors = ("{0:0%db}" % (_n * _lower_bits)).format(
+                int.from_bytes(take(inferiors_byte_count, bytes_iter), 'little', signed=False))
+
+            _inferiors = list(map(lambda inf: int("".join(inf), 2),
+                                  windowed(iter(inferiors), _lower_bits,
+                                           step=_lower_bits)))
+        else:
+            _inferiors = []
+
+        if superiors_byte_count:
+            # superiors contains exactly '2**(upper_bits)' 0s and exactly 'n' 1s
+            superiors = ("{0:0%db}" % (_n + 2**_upper_bits)).format(
+                int.from_bytes(take(superiors_byte_count, bytes_iter), 'little', signed=False))
+
+            _superiors = list(map(lambda x: len(x),
+                                  split_at(iter(superiors),
+                                           lambda v: v == '0', keep_separator=False)))[0:-1]
+
+            _superiors_prefixSums = list(accumulate(_superiors))
+        else:
+            _superiors = []
+
+        # TODO: implement appropriate constructor
+        if _index_type != 0:
+            raise Exception("Sth went wrong!")
+
+        ef_index = EliasFano([0])
+        ef_index._n = _n
+        ef_index._u = 2 ** max(1, _lower_bits + _upper_bits)
+        ef_index._lower_bits = _lower_bits
+        ef_index._upper_bits = _upper_bits
+        ef_index._inferiors = _inferiors
+        ef_index._superiors = _superiors
+        ef_index._superiors_prefixSums = _superiors_prefixSums
+
+        return ef_index
 
     def to_file(self, file_path: str):
         """
@@ -318,44 +399,8 @@ class EliasFano:
 
         assert os.path.exists(file_path) and os.path.isfile(file_path), IOError("File path invalid or does not exist.")
 
-        with open(file_path, "rb") as file:
-            # read HEADER
-            _n = int.from_bytes(file.read(8), 'little', signed=False)
-            _lower_bits = int.from_bytes(file.read(8), 'little', signed=False)
-            _upper_bits = int.from_bytes(file.read(8), 'little', signed=False)
-            inferiors_byte_count = int.from_bytes(file.read(8), 'little', signed=False)
-            superiors_byte_count = int.from_bytes(file.read(8), 'little', signed=False)
+        file = open(file_path, "rb")
+        index_bytes = bytearray(file.read(os.path.getsize(file_path)))
+        file.close()
 
-            # read DATA
-            _inferiors = []
-            _superiors = []
-
-            if inferiors_byte_count:
-                inferiors = bitarray(endian='little')
-                inferiors.frombytes(file.read(inferiors_byte_count))
-
-                _inferiors = list(map(lambda inf: int("".join(inf), 2),
-                                      windowed(iter(inferiors.to01()), _lower_bits,
-                                               step=_lower_bits)))
-
-            if superiors_byte_count:
-                superiors = bitarray(endian='little')
-                superiors.frombytes(file.read(superiors_byte_count))
-                _superiors = list(map(lambda l: sum(l),
-                                      split_at(iter(superiors),
-                                               lambda v: v == 0, keep_separator=False))
-                                  )[0:-1]
-
-                _superiors_prefixSums = list(accumulate(_superiors))
-
-        # TODO: implement appropriate constructor
-        ef_index = EliasFano([0])
-        ef_index._n = _n
-        ef_index._u = 2 ** max(1, _lower_bits + _upper_bits)
-        ef_index._lower_bits = _lower_bits
-        ef_index._upper_bits = _upper_bits
-        ef_index._inferiors = _inferiors
-        ef_index._superiors = _superiors
-        ef_index._superiors_prefixSums = _superiors_prefixSums
-
-        return ef_index
+        return EliasFano.from_bytes(index_bytes)
