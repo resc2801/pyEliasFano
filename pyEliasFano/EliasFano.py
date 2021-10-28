@@ -289,17 +289,17 @@ class EliasFano:
         ba.append(self._upper_bits.to_bytes(1, 'little', signed=False))
 
         ba.append(inferiors_byte_count.to_bytes(rep_size_inferiors_byte_count, 'little', signed=False))
+        if inferiors_byte_count:
+            ba.append(inferiors_bits.to_bytes(inferiors_byte_count, 'little', signed=False))
+
         ba.append(superiors_byte_count.to_bytes(rep_size_superiors_byte_count, 'little', signed=False))
+        if superiors_byte_count:
+            ba.append(superiors_bits.to_bytes(superiors_byte_count, 'little', signed=False))
 
         # DATA
         #   inferiors_bits:         (inferiors_byte_count) bytes
         #   superiors_bits:         (superiors_byte_count) bytes
 
-        if inferiors_byte_count:
-            ba.append(inferiors_bits.to_bytes(inferiors_byte_count, 'little', signed=False))
-
-        if superiors_byte_count:
-            ba.append(superiors_bits.to_bytes(superiors_byte_count, 'little', signed=False))
 
         return len(b''.join(ba)), b''.join(ba)
 
@@ -331,12 +331,6 @@ class EliasFano:
         _upper_bits = int.from_bytes(take(1, bytes_iter), 'little', signed=False)
 
         inferiors_byte_count = int.from_bytes(take(rep_size_inferiors_byte_count, bytes_iter), 'little', signed=False)
-        superiors_byte_count = int.from_bytes(take(rep_size_superiors_byte_count, bytes_iter), 'little', signed=False)
-
-        # DATA
-        #   inferiors_bits:         (inferiors_byte_count) bytes
-        #   superiors_bits:         (superiors_byte_count) bytes
-
         if inferiors_byte_count:
             inferiors = ("{0:0%db}" % (_n * _lower_bits)).format(
                 int.from_bytes(take(inferiors_byte_count, bytes_iter), 'little', signed=False))
@@ -347,6 +341,7 @@ class EliasFano:
         else:
             _inferiors = []
 
+        superiors_byte_count = int.from_bytes(take(rep_size_superiors_byte_count, bytes_iter), 'little', signed=False)
         if superiors_byte_count:
             # superiors contains exactly '2**(upper_bits)' 0s and exactly 'n' 1s
             superiors = ("{0:0%db}" % (_n + 2**_upper_bits)).format(
@@ -359,6 +354,7 @@ class EliasFano:
             _superiors_prefixSums = list(accumulate(_superiors))
         else:
             _superiors = []
+            _superiors_prefixSums = []
 
         # TODO: implement appropriate constructor
         if _index_type != 0:
